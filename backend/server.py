@@ -181,6 +181,78 @@ async def get_dashboard_stats():
     )
 
 
+
+# PDF Export
+@api_router.get("/export/pdf")
+async def export_pdf():
+    # Fetch all checks
+    checks = await db.cleaning_checks.find({}, {"_id": 0}).sort("timestamp", -1).to_list(1000)
+    
+    # Create PDF in memory
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    elements = []
+    
+    # Styles
+    styles = getSampleStyleSheet()
+    
+    # Title
+    title = Paragraph("<b>HACCP Reinigungskontrolle - Export</b>", styles['Title'])
+    elements.append(title)
+    elements.append(Spacer(1, 0.5*cm))
+    
+    # Export info
+    export_date = Paragraph(f"Export-Datum: {datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')} Uhr", styles['Normal'])
+    elements.append(export_date)
+    elements.append(Spacer(1, 1*cm))
+    
+    # Table data
+    if checks:
+        data = [['Datum & Uhrzeit', 'Gerät/Bereich', 'Mitarbeiter']]
+        
+        for check in checks:
+            timestamp = check['timestamp']
+            if isinstance(timestamp, str):
+                timestamp = datetime.fromisoformat(timestamp)
+            date_str = timestamp.strftime('%d.%m.%Y %H:%M')
+            data.append([
+                date_str,
+                check['item_name'],
+                check['employee_initials']
+            ])
+        
+        # Create table
+        table = Table(data, colWidths=[5*cm, 8*cm, 3*cm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e7d32')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ]))
+        
+        elements.append(table)
+    else:
+        no_data = Paragraph("Keine Kontrollen vorhanden", styles['Normal'])
+        elements.append(no_data)
+    
+    # Build PDF
+    doc.build(elements)
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=haccp_kontrollen_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.pdf"}
+    )
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
