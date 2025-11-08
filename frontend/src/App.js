@@ -1,27 +1,46 @@
-import { useState } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
-import Dashboard from "./pages/Dashboard";
-import Checklist from "./pages/Checklist";
-import ManageItems from "./pages/ManageItems";
-import History from "./pages/History";
-import { ClipboardList, LayoutDashboard, Settings, History as HistoryIcon } from "lucide-react";
+import { useEffect } from 'react';
+import '@/App.css';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { ClipboardList, LayoutDashboard, Settings, History as HistoryIcon, LogOut } from 'lucide-react';
+import { isAuthenticated, logout, getRestaurant } from './utils/auth';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Checklist from './pages/Checklist';
+import ManageItems from './pages/ManageItems';
+import History from './pages/History';
+import './utils/auth'; // Initialize axios interceptors
 
 const Navigation = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const restaurant = getRestaurant();
   
   const navItems = [
-    { path: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { path: "/checklist", icon: ClipboardList, label: "Checkliste" },
-    { path: "/items", icon: Settings, label: "Geräte" },
-    { path: "/history", icon: HistoryIcon, label: "Historie" },
+    { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/checklist', icon: ClipboardList, label: 'Checkliste' },
+    { path: '/items', icon: Settings, label: 'Geräte' },
+    { path: '/history', icon: HistoryIcon, label: 'Historie' },
   ];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <nav className="navigation">
       <div className="nav-brand">
         <ClipboardList size={28} />
-        <span>HACCP Kontrolle</span>
+        <div>
+          <span style={{ display: 'block' }}>HACCP Kontrolle</span>
+          {restaurant && (
+            <span style={{ fontSize: '0.75rem', color: '#757575', fontWeight: 400 }}>
+              {restaurant.name}
+            </span>
+          )}
+        </div>
       </div>
       <div className="nav-links">
         {navItems.map((item) => {
@@ -40,7 +59,26 @@ const Navigation = () => {
           );
         })}
       </div>
+      <div className="nav-footer">
+        <button
+          onClick={handleLogout}
+          className="nav-link nav-logout"
+          data-testid="logout-button"
+        >
+          <LogOut size={20} />
+          <span>Abmelden</span>
+        </button>
+      </div>
     </nav>
+  );
+};
+
+const AppLayout = ({ children }) => {
+  return (
+    <div className="app-layout">
+      <Navigation />
+      <main className="main-content">{children}</main>
+    </div>
   );
 };
 
@@ -48,17 +86,50 @@ function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <div className="app-layout">
-          <Navigation />
-          <main className="main-content">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/checklist" element={<Checklist />} />
-              <Route path="/items" element={<ManageItems />} />
-              <Route path="/history" element={<History />} />
-            </Routes>
-          </main>
-        </div>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Dashboard />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/checklist"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Checklist />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/items"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <ManageItems />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <History />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
       </BrowserRouter>
     </div>
   );
