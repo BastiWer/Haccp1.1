@@ -38,7 +38,7 @@ const Checklist = () => {
     const initials = employeeInitials[item.id];
     
     if (!initials || !initials.trim()) {
-      toast.error('Bitte geben Sie Ihr Mitarbeiter-Kürzel ein');
+      toast.error('Bitte geben Sie den Mitarbeiter-Namen ein');
       return;
     }
 
