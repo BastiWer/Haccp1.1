@@ -388,12 +388,30 @@ async def export_pdf(current_user: dict = Depends(get_current_user)):
     styles = getSampleStyleSheet()
     
     # Title
-    title = Paragraph(f"<b>HACCP Reinigungskontrolle - {restaurant['name']}</b>", styles['Title'])
+    title = Paragraph(f"<b>HACCP Reinigungskontrolle</b>", styles['Title'])
     elements.append(title)
+    elements.append(Spacer(1, 0.3*cm))
+    
+    # Restaurant info
+    restaurant_info = Paragraph(f"<b>Restaurant:</b> {restaurant['name']}", styles['Normal'])
+    elements.append(restaurant_info)
+    
+    if restaurant.get('address'):
+        address_info = Paragraph(f"<b>Adresse:</b> {restaurant['address']}", styles['Normal'])
+        elements.append(address_info)
+    
+    if restaurant.get('responsible_person'):
+        responsible_info = Paragraph(f"<b>Verantwortlicher:</b> {restaurant['responsible_person']}", styles['Normal'])
+        elements.append(responsible_info)
+    
+    if restaurant.get('email'):
+        email_info = Paragraph(f"<b>Email:</b> {restaurant['email']}", styles['Normal'])
+        elements.append(email_info)
+    
     elements.append(Spacer(1, 0.5*cm))
     
     # Export info
-    export_date = Paragraph(f"Export-Datum: {datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')} Uhr", styles['Normal'])
+    export_date = Paragraph(f"<b>Export-Datum:</b> {datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')} Uhr", styles['Normal'])
     elements.append(export_date)
     elements.append(Spacer(1, 1*cm))
     
