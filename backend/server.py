@@ -224,6 +224,20 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "restaurant": {"id": restaurant['id'], "name": restaurant['name']}
     }
 
+@api_router.put("/restaurant")
+async def update_restaurant(update_data: RestaurantUpdate, current_user: dict = Depends(get_current_user)):
+    update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
+    
+    if update_dict:
+        await db.restaurants.update_one(
+            {"id": current_user['restaurant_id']}, 
+            {"$set": update_dict}
+        )
+    
+    restaurant = await db.restaurants.find_one({"id": current_user['restaurant_id']}, {"_id": 0})
+    return {"restaurant": restaurant}
+
+
 
 # Cleaning Items Routes
 @api_router.post("/items", response_model=CleaningItem)
