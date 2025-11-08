@@ -167,7 +167,12 @@ async def register(user_data: UserRegister):
         raise HTTPException(status_code=400, detail="Email already registered")
     
     # Create restaurant
-    restaurant = Restaurant(name=user_data.restaurant_name)
+    restaurant = Restaurant(
+        name=user_data.restaurant_name,
+        address=user_data.restaurant_address,
+        responsible_person=user_data.responsible_person,
+        email=user_data.email
+    )
     restaurant_doc = restaurant.model_dump()
     restaurant_doc['created_at'] = restaurant_doc['created_at'].isoformat()
     await db.restaurants.insert_one(restaurant_doc)
