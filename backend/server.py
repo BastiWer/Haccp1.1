@@ -104,6 +104,14 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
     restaurant_name: str
+    restaurant_address: str = ""
+    responsible_person: str = ""
+
+class RestaurantUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    responsible_person: Optional[str] = None
+    email: Optional[EmailStr] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
