@@ -87,6 +87,9 @@ class Restaurant(BaseModel):
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
+    address: str = ""
+    responsible_person: str = ""
+    email: EmailStr
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class User(BaseModel):
