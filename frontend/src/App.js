@@ -33,8 +33,9 @@ const Navigation = () => {
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/checklist', icon: ClipboardList, label: 'Checkliste' },
-    { path: '/items', icon: Settings, label: 'Geräte' },
+    { path: '/items', icon: SettingsIcon, label: 'Geräte' },
     { path: '/history', icon: HistoryIcon, label: 'Historie' },
+    { path: '/settings', icon: SettingsIcon, label: 'Einstellungen' },
   ];
 
   const handleLogout = () => {
