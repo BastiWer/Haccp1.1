@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import '@/App.css';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { ClipboardList, LayoutDashboard, Settings, History as HistoryIcon, LogOut, Moon, Sun } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, Settings as SettingsIcon, History as HistoryIcon, LogOut, Moon, Sun } from 'lucide-react';
 import { isAuthenticated, logout, getRestaurant } from './utils/auth';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
