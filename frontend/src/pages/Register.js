@@ -13,7 +13,9 @@ const Register = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    restaurant_name: ''
+    restaurant_name: '',
+    restaurant_address: '',
+    responsible_person: ''
   });
   const [loading, setLoading] = useState(false);
 
