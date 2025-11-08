@@ -1,21 +1,24 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.units import cm
+import jwt
+from passlib.context import CryptContext
 
 
 ROOT_DIR = Path(__file__).parent
@@ -26,6 +29,12 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Security
+SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+ALGORITHM = "HS256"
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
+
 # Create the main app without a prefix
 app = FastAPI()
 
@@ -33,11 +42,75 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 
+# Helper Functions
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=7)):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + expires_delta
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def decode_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    payload = decode_token(token)
+    user_id = payload.get("user_id")
+    restaurant_id = payload.get("restaurant_id")
+    
+    if not user_id or not restaurant_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    return {"user_id": user_id, "restaurant_id": restaurant_id, "email": user["email"]}
+
+
 # Define Models
+class Restaurant(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class User(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: EmailStr
+    restaurant_id: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class UserRegister(BaseModel):
+    email: EmailStr
+    password: str
+    restaurant_name: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
 class CleaningItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    restaurant_id: str
     name: str
     interval: str  # daily, weekly, monthly
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -54,6 +127,7 @@ class CleaningCheck(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    restaurant_id: str
     item_id: str
     item_name: str
     employee_initials: str
@@ -73,10 +147,73 @@ class DashboardStats(BaseModel):
     recent_checks: List[CleaningCheck]
 
 
+# Auth Routes
+@api_router.post("/auth/register")
+async def register(user_data: UserRegister):
+    # Check if user exists
+    existing_user = await db.users.find_one({"email": user_data.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create restaurant
+    restaurant = Restaurant(name=user_data.restaurant_name)
+    restaurant_doc = restaurant.model_dump()
+    restaurant_doc['created_at'] = restaurant_doc['created_at'].isoformat()
+    await db.restaurants.insert_one(restaurant_doc)
+    
+    # Create user
+    user = User(email=user_data.email, restaurant_id=restaurant.id)
+    user_doc = user.model_dump()
+    user_doc['password_hash'] = hash_password(user_data.password)
+    user_doc['created_at'] = user_doc['created_at'].isoformat()
+    await db.users.insert_one(user_doc)
+    
+    # Create token
+    token = create_access_token({"user_id": user.id, "restaurant_id": restaurant.id})
+    
+    return {
+        "token": token,
+        "user": {"id": user.id, "email": user.email},
+        "restaurant": {"id": restaurant.id, "name": restaurant.name}
+    }
+
+@api_router.post("/auth/login")
+async def login(login_data: UserLogin):
+    # Find user
+    user = await db.users.find_one({"email": login_data.email}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Verify password
+    if not verify_password(login_data.password, user['password_hash']):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Get restaurant
+    restaurant = await db.restaurants.find_one({"id": user['restaurant_id']}, {"_id": 0})
+    
+    # Create token
+    token = create_access_token({"user_id": user['id'], "restaurant_id": user['restaurant_id']})
+    
+    return {
+        "token": token,
+        "user": {"id": user['id'], "email": user['email']},
+        "restaurant": {"id": restaurant['id'], "name": restaurant['name']}
+    }
+
+@api_router.get("/auth/me")
+async def get_me(current_user: dict = Depends(get_current_user)):
+    restaurant = await db.restaurants.find_one({"id": current_user['restaurant_id']}, {"_id": 0})
+    return {
+        "user": {"id": current_user['user_id'], "email": current_user['email']},
+        "restaurant": {"id": restaurant['id'], "name": restaurant['name']}
+    }
+
+
 # Cleaning Items Routes
 @api_router.post("/items", response_model=CleaningItem)
-async def create_item(input: CleaningItemCreate):
+async def create_item(input: CleaningItemCreate, current_user: dict = Depends(get_current_user)):
     item_dict = input.model_dump()
+    item_dict['restaurant_id'] = current_user['restaurant_id']
     item_obj = CleaningItem(**item_dict)
     
     doc = item_obj.model_dump()
@@ -86,8 +223,11 @@ async def create_item(input: CleaningItemCreate):
     return item_obj
 
 @api_router.get("/items", response_model=List[CleaningItem])
-async def get_items():
-    items = await db.cleaning_items.find({}, {"_id": 0}).to_list(1000)
+async def get_items(current_user: dict = Depends(get_current_user)):
+    items = await db.cleaning_items.find(
+        {"restaurant_id": current_user['restaurant_id']}, 
+        {"_id": 0}
+    ).to_list(1000)
     
     for item in items:
         if isinstance(item['created_at'], str):
@@ -96,8 +236,11 @@ async def get_items():
     return items
 
 @api_router.put("/items/{item_id}", response_model=CleaningItem)
-async def update_item(item_id: str, input: CleaningItemUpdate):
-    existing = await db.cleaning_items.find_one({"id": item_id}, {"_id": 0})
+async def update_item(item_id: str, input: CleaningItemUpdate, current_user: dict = Depends(get_current_user)):
+    existing = await db.cleaning_items.find_one(
+        {"id": item_id, "restaurant_id": current_user['restaurant_id']}, 
+        {"_id": 0}
+    )
     if not existing:
         raise HTTPException(status_code=404, detail="Item not found")
     
@@ -113,8 +256,10 @@ async def update_item(item_id: str, input: CleaningItemUpdate):
     return CleaningItem(**updated)
 
 @api_router.delete("/items/{item_id}")
-async def delete_item(item_id: str):
-    result = await db.cleaning_items.delete_one({"id": item_id})
+async def delete_item(item_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.cleaning_items.delete_one(
+        {"id": item_id, "restaurant_id": current_user['restaurant_id']}
+    )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")
     return {"message": "Item deleted successfully"}
@@ -122,8 +267,9 @@ async def delete_item(item_id: str):
 
 # Cleaning Checks Routes
 @api_router.post("/checks", response_model=CleaningCheck)
-async def create_check(input: CleaningCheckCreate):
+async def create_check(input: CleaningCheckCreate, current_user: dict = Depends(get_current_user)):
     check_dict = input.model_dump()
+    check_dict['restaurant_id'] = current_user['restaurant_id']
     check_obj = CleaningCheck(**check_dict)
     
     doc = check_obj.model_dump()
@@ -133,8 +279,11 @@ async def create_check(input: CleaningCheckCreate):
     return check_obj
 
 @api_router.get("/checks", response_model=List[CleaningCheck])
-async def get_checks(limit: int = 100):
-    checks = await db.cleaning_checks.find({}, {"_id": 0}).sort("timestamp", -1).to_list(limit)
+async def get_checks(limit: int = 100, current_user: dict = Depends(get_current_user)):
+    checks = await db.cleaning_checks.find(
+        {"restaurant_id": current_user['restaurant_id']}, 
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(limit)
     
     for check in checks:
         if isinstance(check['timestamp'], str):
@@ -145,8 +294,8 @@ async def get_checks(limit: int = 100):
 
 # Dashboard Stats
 @api_router.get("/dashboard/stats", response_model=DashboardStats)
-async def get_dashboard_stats():
-    total_items = await db.cleaning_items.count_documents({})
+async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
+    total_items = await db.cleaning_items.count_documents({"restaurant_id": current_user['restaurant_id']})
     
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -156,18 +305,25 @@ async def get_dashboard_stats():
     month_start = today_start.replace(day=1)
     
     checks_today = await db.cleaning_checks.count_documents({
+        "restaurant_id": current_user['restaurant_id'],
         "timestamp": {"$gte": today_start.isoformat()}
     })
     
     checks_this_week = await db.cleaning_checks.count_documents({
+        "restaurant_id": current_user['restaurant_id'],
         "timestamp": {"$gte": week_start.isoformat()}
     })
     
     checks_this_month = await db.cleaning_checks.count_documents({
+        "restaurant_id": current_user['restaurant_id'],
         "timestamp": {"$gte": month_start.isoformat()}
     })
     
-    recent_checks = await db.cleaning_checks.find({}, {"_id": 0}).sort("timestamp", -1).to_list(5)
+    recent_checks = await db.cleaning_checks.find(
+        {"restaurant_id": current_user['restaurant_id']}, 
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(5)
+    
     for check in recent_checks:
         if isinstance(check['timestamp'], str):
             check['timestamp'] = datetime.fromisoformat(check['timestamp'])
@@ -181,12 +337,17 @@ async def get_dashboard_stats():
     )
 
 
-
 # PDF Export
 @api_router.get("/export/pdf")
-async def export_pdf():
-    # Fetch all checks
-    checks = await db.cleaning_checks.find({}, {"_id": 0}).sort("timestamp", -1).to_list(1000)
+async def export_pdf(current_user: dict = Depends(get_current_user)):
+    # Fetch all checks for this restaurant
+    checks = await db.cleaning_checks.find(
+        {"restaurant_id": current_user['restaurant_id']}, 
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(1000)
+    
+    # Get restaurant info
+    restaurant = await db.restaurants.find_one({"id": current_user['restaurant_id']}, {"_id": 0})
     
     # Create PDF in memory
     buffer = BytesIO()
@@ -197,7 +358,7 @@ async def export_pdf():
     styles = getSampleStyleSheet()
     
     # Title
-    title = Paragraph("<b>HACCP Reinigungskontrolle - Export</b>", styles['Title'])
+    title = Paragraph(f"<b>HACCP Reinigungskontrolle - {restaurant['name']}</b>", styles['Title'])
     elements.append(title)
     elements.append(Spacer(1, 0.5*cm))
     
@@ -249,7 +410,7 @@ async def export_pdf():
     return StreamingResponse(
         buffer,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=haccp_kontrollen_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.pdf"}
+        headers={"Content-Disposition": f"attachment; filename=haccp_{restaurant['name']}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.pdf"}
     )
 
 
