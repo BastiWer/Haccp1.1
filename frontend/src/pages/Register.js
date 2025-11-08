@@ -68,6 +68,34 @@ const Register = () => {
 
           <div className="form-group">
             <label className="form-label">
+              Adresse
+            </label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Musterstraße 123, 10115 Berlin"
+              value={formData.restaurant_address}
+              onChange={(e) => setFormData({ ...formData, restaurant_address: e.target.value })}
+              data-testid="restaurant-address-input"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              Verantwortlicher
+            </label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Max Mustermann"
+              value={formData.responsible_person}
+              onChange={(e) => setFormData({ ...formData, responsible_person: e.target.value })}
+              data-testid="responsible-person-input"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
               <Mail size={18} />
               Email
             </label>
