@@ -9,7 +9,7 @@ const API = `${BACKEND_URL}/api`;
 const Checklist = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [employeeInitials, setEmployeeInitials] = useState('');
+  const [employeeInitials, setEmployeeInitials] = useState({});
 
   useEffect(() => {
     fetchItems();
@@ -19,6 +19,13 @@ const Checklist = () => {
     try {
       const response = await axios.get(`${API}/items`);
       setItems(response.data);
+      
+      // Initialize empty initials for each item
+      const initials = {};
+      response.data.forEach(item => {
+        initials[item.id] = '';
+      });
+      setEmployeeInitials(initials);
     } catch (error) {
       console.error('Error fetching items:', error);
       toast.error('Fehler beim Laden der Geräte');
@@ -28,7 +35,9 @@ const Checklist = () => {
   };
 
   const handleCheck = async (item) => {
-    if (!employeeInitials.trim()) {
+    const initials = employeeInitials[item.id];
+    
+    if (!initials || !initials.trim()) {
       toast.error('Bitte geben Sie Ihr Mitarbeiter-Kürzel ein');
       return;
     }
@@ -37,13 +46,26 @@ const Checklist = () => {
       await axios.post(`${API}/checks`, {
         item_id: item.id,
         item_name: item.name,
-        employee_initials: employeeInitials.trim().toUpperCase()
+        employee_initials: initials.trim().toUpperCase()
       });
       toast.success(`${item.name} erfolgreich kontrolliert!`);
+      
+      // Clear the initials for this item after successful check
+      setEmployeeInitials(prev => ({
+        ...prev,
+        [item.id]: ''
+      }));
     } catch (error) {
       console.error('Error creating check:', error);
       toast.error('Fehler beim Speichern der Kontrolle');
     }
+  };
+
+  const handleInitialsChange = (itemId, value) => {
+    setEmployeeInitials(prev => ({
+      ...prev,
+      [itemId]: value.toUpperCase()
+    }));
   };
 
   if (loading) {
@@ -62,22 +84,7 @@ const Checklist = () => {
     <div className="page-container" data-testid="checklist-page">
       <div className="page-header">
         <h1 className="page-title">Checkliste</h1>
-        <p className="page-subtitle">Reinigungskontrollen durchführen</p>
-      </div>
-
-      <div className="card" style={{ marginBottom: '2rem' }}>
-        <div className="form-group">
-          <label className="form-label">Mitarbeiter-Kürzel</label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="z.B. JD, MS, AK"
-            value={employeeInitials}
-            onChange={(e) => setEmployeeInitials(e.target.value.toUpperCase())}
-            maxLength={4}
-            data-testid="employee-initials-input"
-          />
-        </div>
+        <p className="page-subtitle">Reinigungskontrollen durchführen - Jeder Mitarbeiter trägt sein Kürzel ein</p>
       </div>
 
       {items.length === 0 ? (
@@ -92,41 +99,44 @@ const Checklist = () => {
         </div>
       ) : (
         <div className="card">
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Gerät/Bereich</th>
-                  <th>Intervall</th>
-                  <th>Aktion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id} data-testid="checklist-item">
-                    <td>{item.name}</td>
-                    <td>
-                      <span className={`badge badge-${item.interval}`}>
-                        {item.interval === 'daily' && 'Täglich'}
-                        {item.interval === 'weekly' && 'Wöchentlich'}
-                        {item.interval === 'monthly' && 'Monatlich'}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => handleCheck(item)}
-                        disabled={!employeeInitials.trim()}
-                        data-testid={`check-button-${item.id}`}
-                      >
-                        <CheckCircle2 size={18} />
-                        Kontrolliert
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="checklist-grid">
+            {items.map((item) => (
+              <div key={item.id} className="checklist-item-card" data-testid="checklist-item">
+                <div className="checklist-item-header">
+                  <h3 className="checklist-item-name">{item.name}</h3>
+                  <span className={`badge badge-${item.interval}`}>
+                    {item.interval === 'daily' && 'Täglich'}
+                    {item.interval === 'weekly' && 'Wöchentlich'}
+                    {item.interval === 'monthly' && 'Monatlich'}
+                  </span>
+                </div>
+                
+                <div className="checklist-item-body">
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.875rem' }}>Mitarbeiter-Kürzel</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="z.B. JD, MS, AK"
+                      value={employeeInitials[item.id] || ''}
+                      onChange={(e) => handleInitialsChange(item.id, e.target.value)}
+                      maxLength={4}
+                      data-testid={`initials-input-${item.id}`}
+                    />
+                  </div>
+                  
+                  <button
+                    className="btn btn-primary btn-full"
+                    onClick={() => handleCheck(item)}
+                    disabled={!employeeInitials[item.id] || !employeeInitials[item.id].trim()}
+                    data-testid={`check-button-${item.id}`}
+                  >
+                    <CheckCircle2 size={18} />
+                    Kontrolliert
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
