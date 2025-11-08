@@ -84,7 +84,7 @@ const Checklist = () => {
     <div className="page-container" data-testid="checklist-page">
       <div className="page-header">
         <h1 className="page-title">Checkliste</h1>
-        <p className="page-subtitle">Reinigungskontrollen durchführen - Jeder Mitarbeiter trägt sein Kürzel ein</p>
+        <p className="page-subtitle">Reinigungskontrollen durchführen - Jeder Mitarbeiter trägt seinen Namen ein</p>
       </div>
 
       {items.length === 0 ? (
