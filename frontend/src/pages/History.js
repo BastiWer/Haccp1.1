@@ -28,12 +28,27 @@ const History = () => {
     }
   };
 
-  const exportToPDF = () => {
-    toast.info('PDF-Export wird vorbereitet...');
-    // PDF export functionality would be implemented here
-    setTimeout(() => {
-      toast.success('PDF-Export abgeschlossen');
-    }, 1000);
+  const exportToPDF = async () => {
+    try {
+      toast.info('PDF-Export wird vorbereitet...');
+      const response = await axios.get(`${API}/export/pdf`, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `haccp_kontrollen_${new Date().getTime()}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      toast.success('PDF-Export erfolgreich heruntergeladen!');
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error('Fehler beim PDF-Export');
+    }
   };
 
   if (loading) {
