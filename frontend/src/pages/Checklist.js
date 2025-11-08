@@ -113,14 +113,14 @@ const Checklist = () => {
                 
                 <div className="checklist-item-body">
                   <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label className="form-label" style={{ fontSize: '0.875rem' }}>Mitarbeiter-Kürzel</label>
+                    <label className="form-label" style={{ fontSize: '0.875rem' }}>Mitarbeiter</label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="z.B. JD, MS, AK"
+                      placeholder="z.B. Johann, Maria, Anna"
                       value={employeeInitials[item.id] || ''}
                       onChange={(e) => handleInitialsChange(item.id, e.target.value)}
-                      maxLength={4}
+                      maxLength={20}
                       data-testid={`initials-input-${item.id}`}
                     />
                   </div>
