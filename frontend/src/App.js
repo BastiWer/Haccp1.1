@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import '@/App.css';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { ClipboardList, LayoutDashboard, Settings, History as HistoryIcon, LogOut } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, Settings, History as HistoryIcon, LogOut, Moon, Sun } from 'lucide-react';
 import { isAuthenticated, logout, getRestaurant } from './utils/auth';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -16,6 +16,18 @@ const Navigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const restaurant = getRestaurant();
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('darkMode') === 'true';
+  });
+  
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark-mode');
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+    }
+    localStorage.setItem('darkMode', darkMode);
+  }, [darkMode]);
   
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -29,6 +41,10 @@ const Navigation = () => {
     navigate('/login');
   };
 
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
+
   return (
     <nav className="navigation">
       <div className="nav-brand">
@@ -36,7 +52,7 @@ const Navigation = () => {
         <div>
           <span style={{ display: 'block' }}>HACCP Kontrolle</span>
           {restaurant && (
-            <span style={{ fontSize: '0.75rem', color: '#757575', fontWeight: 400 }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 400 }}>
               {restaurant.name}
             </span>
           )}
@@ -60,6 +76,15 @@ const Navigation = () => {
         })}
       </div>
       <div className="nav-footer">
+        <button
+          onClick={toggleDarkMode}
+          className="nav-link"
+          data-testid="dark-mode-toggle"
+          title={darkMode ? 'Hell-Modus' : 'Dunkel-Modus'}
+        >
+          {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          <span>{darkMode ? 'Hell-Modus' : 'Dunkel-Modus'}</span>
+        </button>
         <button
           onClick={handleLogout}
           className="nav-link nav-logout"
