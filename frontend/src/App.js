@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Checklist from './pages/Checklist';
 import ManageItems from './pages/ManageItems';
 import History from './pages/History';
+import Settings from './pages/Settings';
 import './utils/auth'; // Initialize axios interceptors
 
 const Navigation = () => {
