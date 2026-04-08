@@ -78,6 +78,8 @@ agenthub/agents/youtube/db
 
 # Mobile development
 android-sdk/ -e 
-# Environment files (commented out for deployment)
-# *.env
-# *.env.*
+# Environment files - WICHTIG: Nicht auf GitHub pushen!
+*.env
+*.env.*
+!frontend/.env.example
+!backend/.env.example
