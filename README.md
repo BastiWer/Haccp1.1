@@ -40,7 +40,7 @@ Eine webbasierte Anwendung zur digitalen Dokumentation von Reinigungskontrollen 
 ### 1. Repository klonen
 
 ```bash
-git clone https://github.com/IHR-USERNAME/haccp-app.git
+git clone https://github.com/BastiWer/haccp-app.git
 cd haccp-app
 ```
 
